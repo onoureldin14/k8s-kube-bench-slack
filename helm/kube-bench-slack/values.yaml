@@ -89,6 +89,35 @@ job:
   # TTL for completed jobs (in seconds)
   ttlSecondsAfterFinished: 3600
 
+# CronJob configuration
+cronjob:
+  # Enable CronJob (set to true for scheduled scans)
+  enabled: false
+  
+  # Cron schedule (default: daily at midnight GMT)
+  # Format: "minute hour day month weekday"
+  # Examples:
+  #   "0 0 * * *"     - Daily at midnight
+  #   "0 */6 * * *"   - Every 6 hours
+  #   "0 9 * * 1"     - Every Monday at 9 AM
+  #   "0 0 * * 0"     - Every Sunday at midnight
+  schedule: "0 0 * * *"
+  
+  # Number of successful jobs to keep
+  successfulJobsHistoryLimit: 3
+  
+  # Number of failed jobs to keep
+  failedJobsHistoryLimit: 3
+  
+  # Suspend cron job (useful for temporarily disabling)
+  suspend: false
+  
+  # Additional labels for cron jobs
+  labels: {}
+  
+  # Additional annotations for cron jobs
+  annotations: {}
+
 # RBAC configuration
 rbac:
   # Create RBAC resources

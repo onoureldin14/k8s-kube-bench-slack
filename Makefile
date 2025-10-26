@@ -7,7 +7,7 @@ IMAGE_NAME = slack-kube-bench
 IMAGE_TAG ?= latest
 FULL_IMAGE_NAME = $(DOCKER_USERNAME)/$(IMAGE_NAME):$(IMAGE_TAG)
 
-.PHONY: help build deploy clean test logs status helm-deploy helm-clean helm-status setup-minikube check-minikube start-minikube stop-minikube reset-minikube docker-build docker-push docker-login
+.PHONY: help build deploy deploy-cron clean test logs status helm-deploy helm-deploy-cron helm-clean helm-status setup-minikube check-minikube start-minikube stop-minikube reset-minikube docker-build docker-push docker-login
 
 # Default target
 help:
@@ -23,8 +23,10 @@ help:
 	@echo "  docker-build   - Build and push Docker image to Docker Hub"
 	@echo "  docker-push    - Push existing image to Docker Hub"
 	@echo "  build          - Build Docker image (for local use)"
-	@echo "  deploy         - Deploy using kubectl/kustomize"
-	@echo "  helm-deploy    - Deploy using Helm (recommended)"
+	@echo "  deploy         - Deploy one-time job using kubectl/kustomize"
+	@echo "  deploy-cron    - Deploy CronJob using kubectl/kustomize"
+	@echo "  helm-deploy    - Deploy one-time job using Helm (recommended)"
+	@echo "  helm-deploy-cron - Deploy CronJob using Helm"
 	@echo "  clean          - Clean up all resources (kubectl)"
 	@echo "  helm-clean     - Clean up Helm release"
 	@echo "  install        - Install Python dependencies in virtual environment"
@@ -205,6 +207,30 @@ deploy:
 	fi
 	@echo "✅ Deployment complete!"
 
+# Deploy CronJob using kubectl/kustomize
+deploy-cron:
+	@if [ -n "$(DOCKER_USERNAME)" ]; then \
+		echo "🐳 Using Docker Hub image: $(FULL_IMAGE_NAME)"; \
+		echo "📋 Deploying kube-bench CronJob..."; \
+		sed "s|image: slack-kube-bench:latest|image: $(FULL_IMAGE_NAME)|g; s|imagePullPolicy: Never|imagePullPolicy: Always|g" k8s/kube-bench-cronjob.yaml | kubectl apply -f -; \
+	else \
+		echo "📦 Using local minikube image (building first...)"; \
+		$(MAKE) build; \
+		echo "📋 Deploying kube-bench CronJob..."; \
+		kubectl apply -f k8s/kube-bench-cronjob.yaml; \
+	fi
+	@if [ -n "$(CRON_SCHEDULE)" ]; then \
+		echo "⏰ Updating CronJob schedule to: $(CRON_SCHEDULE)"; \
+		kubectl patch cronjob kube-bench-security-scan -n kube-bench -p '{"spec":{"schedule":"$(CRON_SCHEDULE)"}}'; \
+	else \
+		echo "⏰ Using default schedule: Daily at midnight GMT (0 0 * * *)"; \
+	fi
+	@echo "✅ CronJob deployment complete!"
+	@echo ""
+	@echo "📊 To check CronJob status:"
+	@echo "  kubectl get cronjobs -n kube-bench"
+	@echo "  kubectl get jobs -n kube-bench"
+
 # Deploy using Helm (recommended)
 helm-deploy: check-minikube
 ifndef SLACK_TOKEN
@@ -239,6 +265,48 @@ endif
 	@echo ""
 	@echo "📝 To view logs:"
 	@echo "  make logs"
+
+# Deploy CronJob using Helm
+helm-deploy-cron: check-minikube
+ifndef SLACK_TOKEN
+	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy-cron SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username] [CRON_SCHEDULE=\"0 0 * * *\"]"
+	@exit 1
+endif
+	@echo "📦 Ensuring namespace exists..."
+	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
+	@if [ -n "$(DOCKER_USERNAME)" ]; then \
+		echo "🐳 Using Docker Hub image: $(FULL_IMAGE_NAME)"; \
+		echo "📋 Deploying kube-bench CronJob with Helm..."; \
+		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+			--set slack.token="$(SLACK_TOKEN)" \
+			--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
+			--set image.tag="$(IMAGE_TAG)" \
+			--set image.pullPolicy="Always" \
+			--set cronjob.enabled=true \
+			--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
+			--namespace kube-bench \
+			--wait; \
+	else \
+		echo "📦 Using local minikube image (building first...)"; \
+		$(MAKE) build; \
+		echo "📋 Deploying kube-bench CronJob with Helm..."; \
+		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+			--set slack.token="$(SLACK_TOKEN)" \
+			--set cronjob.enabled=true \
+			--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
+			--namespace kube-bench \
+			--wait; \
+	fi
+	@echo "✅ Helm CronJob deployment complete!"
+	@echo ""
+	@echo "📊 CronJob status:"
+	@kubectl get cronjobs -n kube-bench
+	@echo ""
+	@echo "⏰ Schedule: $(or $(CRON_SCHEDULE),0 0 * * * (Daily at midnight GMT))"
+	@echo ""
+	@echo "📝 To view CronJob details:"
+	@echo "  kubectl describe cronjob -n kube-bench"
+	@echo "  kubectl get jobs -n kube-bench"
 
 # Create Kubernetes secret
 secret:
