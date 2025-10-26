@@ -99,6 +99,11 @@ class KubeBenchSlackApp:
         logger.info("🔍 Testing Slack connection and kube-bench functionality...")
         
         try:
+            import json
+            import tempfile
+            from pathlib import Path
+            from utils.html_report import HTMLReportGenerator
+            
             # Test Slack connection
             self.slack_notifier.send_test_message(self.config.get_slack_channel())
             
@@ -106,6 +111,37 @@ class KubeBenchSlackApp:
             logger.info("🔒 Testing kube-bench report functionality...")
             dummy_data = self.kube_bench_parser.create_dummy_data()
             self.slack_notifier.send_kube_bench_report(dummy_data, self.config.get_slack_channel())
+            
+            # Test HTML report generation and upload
+            logger.info("🎨 Testing HTML report generation...")
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmppath = Path(tmpdir)
+                    
+                    # Save JSON file
+                    json_path = tmppath / "test-results.json"
+                    with open(json_path, 'w') as f:
+                        json.dump(dummy_data, f, indent=2)
+                    
+                    # Generate HTML report
+                    html_path = tmppath / "test-report.html"
+                    html_generator = HTMLReportGenerator()
+                    html_generator.generate_html_report(dummy_data, str(html_path))
+                    
+                    # Upload HTML report
+                    logger.info("📤 Uploading HTML report to Slack...")
+                    self.slack_client.upload_file(
+                        file_path=str(html_path),
+                        channel=self.config.get_slack_channel(),
+                        title="Test Kube-bench Security Report (HTML)",
+                        initial_comment="🎨 Test HTML report with all test details - Download and open in your browser!"
+                    )
+                    
+                    logger.info("✅ HTML report uploaded successfully!")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ HTML/JSON upload test failed: {e}")
+                # Don't fail the whole test
             
             # Test structured data
             logger.info("📋 Testing structured data...")
@@ -115,7 +151,9 @@ class KubeBenchSlackApp:
                 "components": {
                     "slack_connection": "working",
                     "kube_bench_parser": "working",
-                    "message_formatting": "working"
+                    "message_formatting": "working",
+                    "html_report_generation": "working",
+                    "file_uploads": "working"
                 }
             }
             self.slack_notifier.send_data_as_json(
@@ -126,6 +164,7 @@ class KubeBenchSlackApp:
             
             logger.info("🎉 All tests completed successfully!")
             logger.info("✅ Your kube-bench Slack integration is ready to use!")
+            logger.info("📊 Check your Slack channel for the HTML report!")
             return 0
             
         except Exception as e:

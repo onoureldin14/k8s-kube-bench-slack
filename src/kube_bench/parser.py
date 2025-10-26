@@ -162,7 +162,38 @@ class KubeBenchParser:
                     "total_pass": 12,
                     "total_fail": 3,
                     "total_warn": 8,
-                    "total_info": 0
+                    "total_info": 0,
+                    "tests": [
+                        {
+                            "section": "1.2",
+                            "type": "",
+                            "pass": 1,
+                            "fail": 2,
+                            "warn": 0,
+                            "info": 0,
+                            "desc": "API Server",
+                            "results": [
+                                {
+                                    "test_number": "1.2.1",
+                                    "test_desc": "Ensure that the --anonymous-auth argument is set to false",
+                                    "status": "FAIL",
+                                    "remediation": "Edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml on the control plane node and set the below parameter: --anonymous-auth=false"
+                                },
+                                {
+                                    "test_number": "1.2.2",
+                                    "test_desc": "Ensure that the --basic-auth-file argument is not set",
+                                    "status": "PASS",
+                                    "remediation": ""
+                                },
+                                {
+                                    "test_number": "1.2.5",
+                                    "test_desc": "Ensure that the --kubelet-certificate-authority argument is set as appropriate",
+                                    "status": "FAIL",
+                                    "remediation": "Follow the Kubernetes documentation and setup the TLS connection between the apiserver and kubelets. Then, edit the API server pod specification file /etc/kubernetes/manifests/kube-apiserver.yaml and set the --kubelet-certificate-authority parameter."
+                                }
+                            ]
+                        }
+                    ]
                 },
                 {
                     "id": "2",
@@ -172,7 +203,26 @@ class KubeBenchParser:
                     "total_pass": 5,
                     "total_fail": 2,
                     "total_warn": 1,
-                    "total_info": 0
+                    "total_info": 0,
+                    "tests": [
+                        {
+                            "section": "2",
+                            "type": "",
+                            "pass": 5,
+                            "fail": 2,
+                            "warn": 1,
+                            "info": 0,
+                            "desc": "Etcd Node Configuration",
+                            "results": [
+                                {
+                                    "test_number": "2.1",
+                                    "test_desc": "Ensure that the --cert-file and --key-file arguments are set as appropriate",
+                                    "status": "FAIL",
+                                    "remediation": "Follow the etcd service documentation and configure TLS encryption. Then edit the etcd pod specification file and set the below parameters: --cert-file=</path/to/ca-file> --key-file=</path/to/key-file>"
+                                }
+                            ]
+                        }
+                    ]
                 },
                 {
                     "id": "3",
@@ -182,7 +232,26 @@ class KubeBenchParser:
                     "total_pass": 8,
                     "total_fail": 6,
                     "total_warn": 1,
-                    "total_info": 0
+                    "total_info": 0,
+                    "tests": [
+                        {
+                            "section": "3",
+                            "type": "",
+                            "pass": 8,
+                            "fail": 6,
+                            "warn": 1,
+                            "info": 0,
+                            "desc": "Control Plane Configuration",
+                            "results": [
+                                {
+                                    "test_number": "3.2.1",
+                                    "test_desc": "Ensure that a minimal audit policy is created",
+                                    "status": "FAIL",
+                                    "remediation": "Create an audit policy file and pass it to the API server using the --audit-policy-file parameter."
+                                }
+                            ]
+                        }
+                    ]
                 },
                 {
                     "id": "4",
@@ -192,7 +261,32 @@ class KubeBenchParser:
                     "total_pass": 1,
                     "total_fail": 5,
                     "total_warn": 10,
-                    "total_info": 0
+                    "total_info": 0,
+                    "tests": [
+                        {
+                            "section": "4",
+                            "type": "",
+                            "pass": 1,
+                            "fail": 5,
+                            "warn": 10,
+                            "info": 0,
+                            "desc": "Worker Node Security Configuration",
+                            "results": [
+                                {
+                                    "test_number": "4.2.1",
+                                    "test_desc": "Ensure that the --anonymous-auth argument is set to false",
+                                    "status": "FAIL",
+                                    "remediation": "Edit the kubelet service file on each worker node and set the parameter: --anonymous-auth=false"
+                                },
+                                {
+                                    "test_number": "4.2.2",
+                                    "test_desc": "Ensure that the --authorization-mode argument is not set to AlwaysAllow",
+                                    "status": "FAIL",
+                                    "remediation": "Edit the kubelet service file and set: --authorization-mode=Webhook"
+                                }
+                            ]
+                        }
+                    ]
                 },
                 {
                     "id": "5",
@@ -202,7 +296,8 @@ class KubeBenchParser:
                     "total_pass": 3,
                     "total_fail": 0,
                     "total_warn": 32,
-                    "total_info": 0
+                    "total_info": 0,
+                    "tests": []
                 }
             ],
             "Totals": {

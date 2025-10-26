@@ -72,6 +72,10 @@ temp/
 # Test files
 test_connection.py
 *_test.py
+test_html.py
+test-report.html
+test-json.json
+*-report-*.html
 
 # Documentation (keep only README.md)
 SUMMARY.md

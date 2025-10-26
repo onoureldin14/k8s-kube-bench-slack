@@ -15,6 +15,13 @@ class SlackFormatter:
     @staticmethod
     def parse_kube_bench_summary(data: Dict[str, Any]) -> Dict[str, Any]:
         """Parse kube-bench data to extract summary information."""
+        # Extract version from first control if available
+        version = 'Unknown'
+        if 'Controls' in data and len(data['Controls']) > 0:
+            first_control = data['Controls'][0]
+            # Prefer detected_version (actual k8s version) over version (CIS benchmark version)
+            version = first_control.get('detected_version', first_control.get('version', 'Unknown'))
+        
         summary = {
             'total_tests': 0,
             'passed': 0,
@@ -23,7 +30,7 @@ class SlackFormatter:
             'info': 0,
             'controls': [],
             'critical_failures': [],
-            'version': data.get('version', 'Unknown')
+            'version': version
         }
         
         # Get totals from the top level if available
@@ -178,7 +185,7 @@ class SlackFormatter:
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"⏰ Scan completed: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())} | 🔗 Full report available in pod logs"
+                    "text": f"⏰ Scan completed: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())} | 📄 Full HTML report attached below"
                 }
             ]
         })

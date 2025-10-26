@@ -29,6 +29,7 @@ class SlackClient:
         
         self.client = WebClient(token=self.token)
         self.default_channel = os.getenv('DEFAULT_CHANNEL', '#general')
+        self._channel_id_cache = {}  # Cache channel IDs to avoid repeated lookups
     
     def send_message(self, text: str, channel: Optional[str] = None, **kwargs) -> Dict[str, Any]:
         """
@@ -50,6 +51,10 @@ class SlackClient:
                 text=text,
                 **kwargs
             )
+            # Cache the channel ID from the response
+            if 'channel' in response.data:
+                self._channel_id_cache[channel] = response.data['channel']
+            
             logger.info(f"Message sent successfully to {channel}")
             return response.data
             
@@ -77,6 +82,10 @@ class SlackClient:
                 blocks=blocks,
                 **kwargs
             )
+            # Cache the channel ID from the response
+            if 'channel' in response.data:
+                self._channel_id_cache[channel] = response.data['channel']
+            
             logger.info(f"Rich message sent successfully to {channel}")
             return response.data
             
@@ -84,10 +93,49 @@ class SlackClient:
             logger.error(f"Error sending rich message: {e.response['error']}")
             raise
     
+    def _get_channel_id(self, channel: str) -> str:
+        """
+        Get channel ID from channel name.
+        
+        Args:
+            channel: Channel name (e.g., #kube-bench) or ID
+        
+        Returns:
+            Channel ID
+        """
+        # Check cache first
+        if channel in self._channel_id_cache:
+            return self._channel_id_cache[channel]
+        
+        # If it's already an ID (doesn't start with #), return as-is
+        if not channel.startswith('#'):
+            return channel
+        
+        # Remove # prefix
+        channel_name = channel.lstrip('#')
+        
+        try:
+            # List all channels and find the matching one
+            response = self.client.conversations_list(types="public_channel,private_channel")
+            for ch in response.get('channels', []):
+                if ch.get('name') == channel_name:
+                    channel_id = ch.get('id')
+                    # Cache it for future use
+                    self._channel_id_cache[channel] = channel_id
+                    return channel_id
+            
+            # If not found, return the original (might be a DM or already an ID)
+            logger.warning(f"Could not find channel ID for {channel}, using as-is")
+            return channel
+            
+        except SlackApiError as e:
+            logger.warning(f"Error resolving channel ID: {e.response['error']}, using channel name as-is")
+            return channel
+    
     def send_file(self, file_path: str, channel: Optional[str] = None, 
                   title: Optional[str] = None, comment: Optional[str] = None) -> Dict[str, Any]:
         """
-        Send a file to Slack.
+        Send a file to Slack using the new files_upload_v2 API.
         
         Args:
             file_path: Path to the file to upload
@@ -101,8 +149,11 @@ class SlackClient:
         channel = channel or self.default_channel
         
         try:
-            response = self.client.files_upload(
-                channels=channel,
+            # Resolve channel name to ID for files_upload_v2
+            channel_id = self._get_channel_id(channel)
+            
+            response = self.client.files_upload_v2(
+                channel=channel_id,
                 file=file_path,
                 title=title,
                 initial_comment=comment
@@ -113,6 +164,22 @@ class SlackClient:
         except SlackApiError as e:
             logger.error(f"Error sending file: {e.response['error']}")
             raise
+    
+    def upload_file(self, file_path: str, channel: Optional[str] = None,
+                   title: Optional[str] = None, initial_comment: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Upload a file to Slack (alias for send_file for consistency).
+        
+        Args:
+            file_path: Path to the file to upload
+            channel: Channel to send to (defaults to DEFAULT_CHANNEL)
+            title: Title for the file
+            initial_comment: Comment to include with the file
+        
+        Returns:
+            Response from Slack API
+        """
+        return self.send_file(file_path, channel, title, initial_comment)
     
     def get_channel_info(self, channel: str) -> Dict[str, Any]:
         """

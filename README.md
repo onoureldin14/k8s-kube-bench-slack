@@ -63,6 +63,7 @@ Before you can use this project, you need to create a Slack app and get the nece
    - Add the following scopes:
      - `app_mentions:read` - Read messages that mention the bot
      - `channels:join` - Join channels
+     - `channels:read` - View basic channel information (required for file uploads)
      - `chat:write` - Send messages
      - `files:read` - Read files (for kube-bench results)
      - `files:write` - Upload files
@@ -553,6 +554,38 @@ kubectl logs job/kube-bench-security-scan -n kube-bench -c kube-bench
 kubectl logs job/kube-bench-security-scan -n kube-bench -c slack-notifier
 ```
 
+## 📊 Slack Report Format
+
+When a kube-bench scan completes, you'll receive **two deliverables** in your Slack channel:
+
+### 1. 📱 Formatted Slack Message
+
+A rich, interactive message with:
+- **Overall Status**: PASSED / NEEDS ATTENTION / CRITICAL
+- **Summary Statistics**: Total tests, passed, failed, warnings
+- **Critical Areas**: Controls with >5 failures highlighted
+- **Control Breakdown**: Pass rates for each security control
+- **Sample Failed Tests**: Top 10 failed tests with remediation steps
+- **Timestamp**: When the scan was completed
+
+### 2. 🎨 Interactive HTML Report
+
+A **beautiful, styled HTML report** that includes:
+- **Executive Summary**: Visual dashboard with color-coded stats
+- **Progress Bar**: Visual pass rate indicator
+- **Expandable Controls**: Click to expand/collapse each control section
+- **Complete Test Results**: Every single test with status, description, and remediation
+- **Color Coding**: Pass (green), Fail (red), Warn (yellow)
+- **Mobile Responsive**: Works on any device
+- **Print Friendly**: Clean formatting for PDF export
+
+**How to use:**
+1. Download the HTML file from Slack
+2. Open in any web browser
+3. Click on controls to expand/collapse details
+4. Use "Expand/Collapse All" button for quick navigation
+5. Print or save as PDF for compliance records
+
 ## 📁 Project Structure
 
 ```
@@ -679,7 +712,10 @@ The Slack bot will send:
 ### Slack Notifications
 - **Rich formatting** with blocks and emojis
 - **Summary statistics** at a glance
-- **Control-by-control** breakdown
+- **Control-by-control** breakdown with pass rates
+- **Critical areas** highlighting (controls with >5 failures)
+- **Sample failed tests** with remediation steps
+- **Beautiful HTML report** - Interactive, styled report with all test details
 - **Error handling** with timeout notifications
 - **Secure token storage** using Kubernetes secrets
 
