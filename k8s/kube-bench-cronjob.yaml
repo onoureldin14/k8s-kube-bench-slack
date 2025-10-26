@@ -1,0 +1,83 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kube-bench-security-scan
+  namespace: kube-bench
+spec:
+  # Default: Run daily at midnight GMT (0 0 * * *)
+  schedule: "0 0 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: kube-bench
+            component: security-scan
+        spec:
+          serviceAccountName: kube-bench-sa
+          restartPolicy: Never
+          containers:
+          # Kube-bench container
+          - name: kube-bench
+            image: aquasec/kube-bench:latest
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                kube-bench run --targets master,node,etcd,policies --json > /tmp/kube-bench-results/results.json 2>&1
+                echo "Kube-bench scan complete. Results written to /tmp/kube-bench-results/results.json"
+            volumeMounts:
+            - name: kube-bench-results
+              mountPath: /tmp/kube-bench-results
+            env:
+            - name: KUBECONFIG
+              value: "/etc/kubernetes/admin.conf"
+            securityContext:
+              privileged: true
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          
+          # Slack notification sidecar container
+          - name: slack-notifier
+            image: slack-kube-bench:latest
+            imagePullPolicy: Never
+            env:
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: slack-bot-token
+            - name: SLACK_CHANNEL
+              value: "#kube-bench"
+            - name: KUBE_BENCH_OUTPUT_DIR
+              value: "/tmp/kube-bench-results"
+            volumeMounts:
+            - name: kube-bench-results
+              mountPath: /tmp/kube-bench-results
+            - name: kubeconfig
+              mountPath: /etc/kubernetes
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+          
+          volumes:
+          - name: kube-bench-results
+            emptyDir: {}
+          - name: kubeconfig
+            hostPath:
+              path: /etc/kubernetes
+              type: Directory
+          
+          nodeSelector:
+            kubernetes.io/os: linux
+

@@ -341,6 +341,61 @@ export SLACK_TOKEN=xoxb-your-token
 - ✅ Easy upgrades and rollbacks
 - ✅ Supports both local and Docker Hub images
 
+### 4. ⏰ Deploy as CronJob (Scheduled Scans)
+
+**For automated recurring security scans:**
+
+```bash
+# Deploy with default schedule (daily at midnight GMT)
+make helm-deploy-cron SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username
+
+# Deploy with custom schedule (every 6 hours)
+make helm-deploy-cron SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username CRON_SCHEDULE="0 */6 * * *"
+
+# Deploy with custom schedule (every Monday at 9 AM)
+make helm-deploy-cron SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username CRON_SCHEDULE="0 9 * * 1"
+
+# Deploy with kubectl (default schedule)
+make deploy-cron DOCKER_USERNAME=your-username
+
+# Deploy with kubectl (custom schedule)
+make deploy-cron DOCKER_USERNAME=your-username CRON_SCHEDULE="0 0 * * 0"
+```
+
+**Cron Schedule Examples:**
+- `"0 0 * * *"` - Daily at midnight GMT
+- `"0 */6 * * *"` - Every 6 hours
+- `"0 9 * * 1"` - Every Monday at 9 AM
+- `"0 0 * * 0"` - Every Sunday at midnight
+- `"0 2 * * *"` - Daily at 2 AM GMT
+
+**What happens:**
+- ✅ Automated security scans on schedule
+- ✅ Results sent to Slack after each scan
+- ✅ Job history maintained (last 3 successful, 3 failed)
+- ✅ Can suspend/resume without deleting
+
+**Managing CronJobs:**
+```bash
+# Check CronJob status
+kubectl get cronjobs -n kube-bench
+
+# View recent jobs
+kubectl get jobs -n kube-bench
+
+# Suspend CronJob (pause scheduling)
+kubectl patch cronjob kube-bench-security-scan -n kube-bench -p '{"spec":{"suspend":true}}'
+
+# Resume CronJob
+kubectl patch cronjob kube-bench-security-scan -n kube-bench -p '{"spec":{"suspend":false}}'
+
+# Trigger manual run
+kubectl create job --from=cronjob/kube-bench-security-scan manual-scan-$(date +%s) -n kube-bench
+
+# Delete CronJob
+make helm-clean
+```
+
 ## 📖 Detailed Instructions
 
 ### 🐍 Local Python Script Testing
@@ -875,13 +930,26 @@ make helm-deploy SLACK_TOKEN=xoxb-your-token \
 
 ## 🚀 Quick Reference
 
-### For Docker Hub Deployment (Recommended)
+### For One-Time Scan (Docker Hub)
 ```bash
 make docker-login DOCKER_USERNAME=your-username
 make docker-build DOCKER_USERNAME=your-username
 make setup-minikube
 make helm-deploy SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username
 make logs
+```
+
+### For Scheduled Scans (CronJob)
+```bash
+# Daily at midnight GMT (default)
+make helm-deploy-cron SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username
+
+# Custom schedule (every 6 hours)
+make helm-deploy-cron SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username CRON_SCHEDULE="0 */6 * * *"
+
+# Check CronJob status
+kubectl get cronjobs -n kube-bench
+kubectl get jobs -n kube-bench
 ```
 
 ### For Testing (Local Python)
@@ -895,15 +963,10 @@ make test                       # Test Slack connection
 ```bash
 make setup-minikube            # Install and start minikube
 make secret SLACK_TOKEN=xoxb-your-token-here
-make deploy                    # Builds locally and loads into minikube
+make deploy                    # One-time scan
+# OR
+make deploy-cron CRON_SCHEDULE="0 0 * * *"  # Scheduled scans
 make status
-```
-
-### For Production (Helm + Docker Hub)
-```bash
-make docker-build DOCKER_USERNAME=your-username
-make helm-deploy SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username
-make helm-status
 ```
 
 ### Minikube Management
