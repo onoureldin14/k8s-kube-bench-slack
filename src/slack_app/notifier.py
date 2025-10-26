@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .client import SlackClient
 from .formatter import SlackFormatter
+from utils.html_report import HTMLReportGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -166,8 +167,31 @@ class SlackNotifier:
                             with open(latest_file, 'r') as f:
                                 kube_bench_data = json.load(f)
                             
-                            # Send the report
+                            # Send the formatted report
                             self.send_kube_bench_report(kube_bench_data, channel)
+                            
+                            # Generate HTML report
+                            logger.info("📊 Generating HTML report...")
+                            try:
+                                timestamp = time.strftime('%Y%m%d-%H%M%S', time.gmtime())
+                                html_path = output_path / f"kube-bench-report-{timestamp}.html"
+                                
+                                html_generator = HTMLReportGenerator()
+                                html_generator.generate_html_report(kube_bench_data, str(html_path))
+                                
+                                # Upload the HTML report
+                                logger.info("📤 Uploading HTML report...")
+                                self.client.upload_file(
+                                    file_path=str(html_path),
+                                    channel=channel,
+                                    title=f"Kube-bench Security Report - {timestamp}",
+                                    initial_comment="🎨 Interactive HTML report with all test details - Download and open in your browser!"
+                                )
+                                logger.info("✅ HTML report uploaded successfully!")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Could not generate/upload HTML report: {e}")
+                                # Don't fail the whole process if HTML generation fails
+                            
                             logger.info("✅ Kube-bench report sent successfully! Exiting...")
                             return True
                             
