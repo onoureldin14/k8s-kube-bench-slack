@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kube-bench
+
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  # NOTE: slack-secret.yaml is NOT included here
+  # Secrets should be created using: make secret SLACK_TOKEN=xoxb-your-token
+  # Or: kubectl create secret generic slack-credentials --from-literal=slack-bot-token="xoxb-your-token" -n kube-bench
+  - kube-bench-job.yaml
+
+commonLabels:
+  app: kube-bench
+  version: v1.0.0
+  component: security-scanning
+
+images:
+  - name: slack-kube-bench
+    newTag: latest
