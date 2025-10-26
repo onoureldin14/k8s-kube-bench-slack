@@ -16,7 +16,11 @@ spec:
       # Kube-bench container
       - name: kube-bench
         image: aquasec/kube-bench:latest
-        command: ["kube-bench", "run", "--targets", "master,node,etcd,policies", "--json"]
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            kube-bench run --targets master,node,etcd,policies --json > /tmp/kube-bench-results/results.json 2>&1
+            echo "Kube-bench scan complete. Results written to /tmp/kube-bench-results/results.json"
         volumeMounts:
         - name: kube-bench-results
           mountPath: /tmp/kube-bench-results

@@ -21,53 +21,79 @@ class SlackFormatter:
             'failed': 0,
             'warned': 0,
             'info': 0,
-            'controls': []
+            'controls': [],
+            'critical_failures': [],
+            'version': data.get('version', 'Unknown')
         }
+        
+        # Get totals from the top level if available
+        if 'Totals' in data:
+            totals = data['Totals']
+            summary['passed'] = totals.get('total_pass', 0)
+            summary['failed'] = totals.get('total_fail', 0)
+            summary['warned'] = totals.get('total_warn', 0)
+            summary['info'] = totals.get('total_info', 0)
+            summary['total_tests'] = summary['passed'] + summary['failed'] + summary['warned'] + summary['info']
         
         if 'Controls' in data:
             for control in data['Controls']:
-                control_name = control.get('id', 'Unknown')
-                control_results = control.get('results', [])
+                control_id = control.get('id', 'Unknown')
+                control_text = control.get('text', 'Unknown')
+                control_type = control.get('node_type', 'Unknown')
                 
                 control_summary = {
-                    'name': control_name,
-                    'total': len(control_results),
-                    'passed': 0,
-                    'failed': 0,
-                    'warned': 0,
-                    'info': 0
+                    'id': control_id,
+                    'text': control_text,
+                    'type': control_type,
+                    'passed': control.get('total_pass', 0),
+                    'failed': control.get('total_fail', 0),
+                    'warned': control.get('total_warn', 0),
+                    'info': control.get('total_info', 0)
                 }
                 
-                for result in control_results:
-                    status = result.get('status', '').lower()
-                    if status == 'pass':
-                        control_summary['passed'] += 1
-                        summary['passed'] += 1
-                    elif status == 'fail':
-                        control_summary['failed'] += 1
-                        summary['failed'] += 1
-                    elif status == 'warn':
-                        control_summary['warned'] += 1
-                        summary['warned'] += 1
-                    elif status == 'info':
-                        control_summary['info'] += 1
-                        summary['info'] += 1
-                    
-                    summary['total_tests'] += 1
-                
                 summary['controls'].append(control_summary)
+                
+                # Collect critical failures (high fail count)
+                if control_summary['failed'] > 5:
+                    summary['critical_failures'].append({
+                        'control': f"{control_id}: {control_text}",
+                        'failed': control_summary['failed']
+                    })
         
         return summary
     
     @staticmethod
     def create_kube_bench_blocks(summary: Dict[str, Any], full_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Create Slack blocks for kube-bench report."""
+        # Determine overall status
+        total_issues = summary['failed'] + summary['warned']
+        if summary['failed'] == 0:
+            status_emoji = "✅"
+            status_text = "PASSED"
+            status_color = "#36a64f"
+        elif summary['failed'] < 10:
+            status_emoji = "⚠️"
+            status_text = "NEEDS ATTENTION"
+            status_color = "#ff9900"
+        else:
+            status_emoji = "❌"
+            status_text = "CRITICAL"
+            status_color = "#ff0000"
+        
         blocks = [
             {
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": "🔒 Kube-bench Security Scan Results"
+                    "text": f"{status_emoji} Kube-bench Security Scan Results",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Status:* {status_text}\n*Version:* {summary.get('version', 'Unknown')}"
                 }
             },
             {
@@ -75,23 +101,42 @@ class SlackFormatter:
                 "fields": [
                     {
                         "type": "mrkdwn",
-                        "text": f"*Total Tests:*\n{summary['total_tests']}"
+                        "text": f"*Total Tests:*\n`{summary['total_tests']}`"
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*Passed:*\n✅ {summary['passed']}"
+                        "text": f"*Passed:*\n✅ `{summary['passed']}`"
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*Failed:*\n❌ {summary['failed']}"
+                        "text": f"*Failed:*\n❌ `{summary['failed']}`"
                     },
                     {
                         "type": "mrkdwn",
-                        "text": f"*Warnings:*\n⚠️ {summary['warned']}"
+                        "text": f"*Warnings:*\n⚠️ `{summary['warned']}`"
                     }
                 ]
             }
         ]
+        
+        # Add critical failures section if any
+        if summary.get('critical_failures'):
+            blocks.append({"type": "divider"})
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*🚨 Critical Areas (>5 failures):*"
+                }
+            })
+            for failure in summary['critical_failures'][:3]:  # Show top 3
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"• {failure['control']}\n  Failed: `{failure['failed']}` tests"
+                    }
+                })
         
         # Add control summaries
         if summary['controls']:
@@ -100,28 +145,40 @@ class SlackFormatter:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Control Results:*"
+                    "text": "*📊 Control Summary:*"
                 }
             })
             
-            for control in summary['controls'][:5]:  # Show first 5 controls
-                status_emoji = "✅" if control['failed'] == 0 else "❌"
+            for control in summary['controls']:
+                # Calculate pass rate
+                total = control['passed'] + control['failed'] + control['warned']
+                pass_rate = (control['passed'] / total * 100) if total > 0 else 0
+                
+                # Choose emoji based on pass rate
+                if pass_rate == 100:
+                    emoji = "✅"
+                elif pass_rate >= 80:
+                    emoji = "⚠️"
+                else:
+                    emoji = "❌"
+                
                 blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"{status_emoji} *{control['name']}*\nPassed: {control['passed']}, Failed: {control['failed']}, Warnings: {control['warned']}"
+                        "text": f"{emoji} *{control['id']}: {control['text']}*\n"
+                               f"Pass: `{control['passed']}` | Fail: `{control['failed']}` | Warn: `{control['warned']}` | Pass Rate: `{pass_rate:.1f}%`"
                     }
                 })
         
-        # Add timestamp
+        # Add timestamp and footer
         blocks.append({"type": "divider"})
         blocks.append({
             "type": "context",
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"Scan completed at {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}"
+                    "text": f"⏰ Scan completed: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())} | 🔗 Full report available in pod logs"
                 }
             ]
         })

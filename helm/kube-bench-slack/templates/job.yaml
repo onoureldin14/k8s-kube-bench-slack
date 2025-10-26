@@ -45,7 +45,11 @@ spec:
       - name: kube-bench
         image: "{{ .Values.global.imageRegistry }}{{ .Values.kubebench.image.repository }}:{{ .Values.kubebench.image.tag }}"
         imagePullPolicy: {{ .Values.kubebench.image.pullPolicy }}
-        command: ["kube-bench", "run", "--targets", {{ .Values.kubebench.targets | quote }}, "--{{ .Values.kubebench.outputFormat }}"]
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            kube-bench run --targets {{ .Values.kubebench.targets }} --{{ .Values.kubebench.outputFormat }} > /tmp/kube-bench-results/results.json 2>&1
+            echo "Kube-bench scan complete. Results written to /tmp/kube-bench-results/results.json"
         volumeMounts:
         - name: {{ .Values.volumes.shared.name }}
           mountPath: /tmp/kube-bench-results
@@ -70,7 +74,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: {{ include "kube-bench-slack.secretName" . }}
-              key: {{ .Values.slack.token.secretKey }}
+              key: slack-bot-token
         - name: SLACK_CHANNEL
           value: {{ .Values.slack.channel | quote }}
         - name: KUBE_BENCH_OUTPUT_DIR

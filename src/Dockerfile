@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY main.py .
+COPY . .
 
 # Create non-root user for security
 RUN useradd -m -u 1000 slackbot && chown -R slackbot:slackbot /app

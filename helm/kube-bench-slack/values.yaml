@@ -11,10 +11,8 @@ global:
 
 # Namespace configuration
 namespace:
-  # Name of the namespace to create
+  # Name of the namespace (created by Makefile/kubectl)
   name: kube-bench
-  # Create namespace if it doesn't exist
-  create: true
 
 # Kube-bench configuration
 kubebench:
@@ -68,12 +66,11 @@ slack:
       memory: "128Mi"
       cpu: "100m"
   
-  # Slack bot token (should be provided via secret)
-  token:
-    # Secret name containing the Slack token
-    secretName: slack-credentials
-    # Key in the secret containing the token
-    secretKey: slack-bot-token
+  # Slack bot token
+  # Can be provided as:
+  # 1. A string: --set slack.token="xoxb-your-token" (creates secret automatically)
+  # 2. Leave empty to use existing secret named 'slack-credentials'
+  token: ""  # Set via --set slack.token="xoxb-..." or leave empty to use existing secret
 
 # Job configuration
 job:
