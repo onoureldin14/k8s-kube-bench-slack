@@ -87,10 +87,10 @@ Create the name of the cluster role binding
 Create the name of the secret
 */}}
 {{- define "kube-bench-slack.secretName" -}}
-{{- if .Values.slack.token.secretName }}
-{{- .Values.slack.token.secretName }}
-{{- else }}
+{{- if kindIs "string" .Values.slack.token }}
 {{- printf "%s-slack-credentials" (include "kube-bench-slack.fullname" .) }}
+{{- else }}
+slack-credentials
 {{- end }}
 {{- end }}
 

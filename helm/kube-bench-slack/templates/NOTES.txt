@@ -10,7 +10,7 @@
 
 4. To update the Slack token, create a secret with your token:
    kubectl create secret generic {{ include "kube-bench-slack.secretName" . }} \
-     --from-literal={{ .Values.slack.token.secretKey }}="xoxb-your-slack-token-here" \
+     --from-literal=slack-bot-token="xoxb-your-slack-token-here" \
      --namespace={{ include "kube-bench-slack.namespace" . }}
 
 5. To clean up the deployment:

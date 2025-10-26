@@ -211,6 +211,8 @@ ifndef SLACK_TOKEN
 	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username]"
 	@exit 1
 endif
+	@echo "📦 Ensuring namespace exists..."
+	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
 	@if [ -n "$(DOCKER_USERNAME)" ]; then \
 		echo "🐳 Using Docker Hub image: $(FULL_IMAGE_NAME)"; \
 		echo "📋 Deploying kube-bench with Helm..."; \
@@ -219,7 +221,6 @@ endif
 			--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
 			--set image.tag="$(IMAGE_TAG)" \
 			--set image.pullPolicy="Always" \
-			--create-namespace \
 			--namespace kube-bench \
 			--wait; \
 	else \
@@ -228,7 +229,6 @@ endif
 		echo "📋 Deploying kube-bench with Helm..."; \
 		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
 			--set slack.token="$(SLACK_TOKEN)" \
-			--create-namespace \
 			--namespace kube-bench \
 			--wait; \
 	fi

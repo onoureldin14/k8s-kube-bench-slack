@@ -146,42 +146,69 @@ class KubeBenchParser:
     
     def create_dummy_data(self) -> Dict[str, Any]:
         """
-        Create dummy kube-bench data for testing.
+        Create realistic dummy kube-bench data for testing based on actual scan output.
         
         Returns:
-            Dummy kube-bench data
+            Dummy kube-bench data matching real kube-bench structure
         """
         return {
+            "version": "cis-1.11",
             "Controls": [
                 {
-                    "id": "1.1.1",
-                    "results": [
-                        {
-                            "status": "PASS",
-                            "test_desc": "Ensure the API server pod specification file permissions are set to 644 or more restrictive"
-                        },
-                        {
-                            "status": "PASS", 
-                            "test_desc": "Ensure the API server pod specification file ownership is set to root:root"
-                        },
-                        {
-                            "status": "FAIL",
-                            "test_desc": "Ensure the API server pod specification file has permissions set to 644 or more restrictive"
-                        }
-                    ]
+                    "id": "1",
+                    "version": "cis-1.11",
+                    "text": "Control Plane Security Configuration",
+                    "node_type": "master",
+                    "total_pass": 12,
+                    "total_fail": 3,
+                    "total_warn": 8,
+                    "total_info": 0
                 },
                 {
-                    "id": "1.1.2",
-                    "results": [
-                        {
-                            "status": "PASS",
-                            "test_desc": "Ensure the API server pod specification file ownership is set to root:root"
-                        },
-                        {
-                            "status": "WARN",
-                            "test_desc": "Ensure the API server pod specification file has permissions set to 644 or more restrictive"
-                        }
-                    ]
+                    "id": "2",
+                    "version": "cis-1.11",
+                    "text": "Etcd Node Configuration",
+                    "node_type": "etcd",
+                    "total_pass": 5,
+                    "total_fail": 2,
+                    "total_warn": 1,
+                    "total_info": 0
+                },
+                {
+                    "id": "3",
+                    "version": "cis-1.11",
+                    "text": "Control Plane Configuration",
+                    "node_type": "controlplane",
+                    "total_pass": 8,
+                    "total_fail": 6,
+                    "total_warn": 1,
+                    "total_info": 0
+                },
+                {
+                    "id": "4",
+                    "version": "cis-1.11",
+                    "text": "Worker Node Security Configuration",
+                    "node_type": "node",
+                    "total_pass": 1,
+                    "total_fail": 5,
+                    "total_warn": 10,
+                    "total_info": 0
+                },
+                {
+                    "id": "5",
+                    "version": "cis-1.11",
+                    "text": "Kubernetes Policies",
+                    "node_type": "policies",
+                    "total_pass": 3,
+                    "total_fail": 0,
+                    "total_warn": 32,
+                    "total_info": 0
                 }
-            ]
+            ],
+            "Totals": {
+                "total_pass": 29,
+                "total_fail": 16,
+                "total_warn": 52,
+                "total_info": 0
+            }
         }

@@ -116,6 +116,7 @@ class SlackNotifier:
                                  max_wait_time: int = 300) -> bool:
         """
         Monitor kube-bench output directory and send results when available.
+        Waits for file to be completely written before processing.
         
         Args:
             output_dir: Directory to monitor for kube-bench output files
@@ -131,32 +132,65 @@ class SlackNotifier:
         
         # Wait for kube-bench to complete and generate output files
         start_time = time.time()
+        last_file_found = None
+        
         while time.time() - start_time < max_wait_time:
             # Look for JSON output files
             json_files = list(output_path.glob("*.json"))
+            
             if json_files:
-                logger.info(f"Found kube-bench output files: {json_files}")
-                
                 # Process the most recent JSON file
                 latest_file = max(json_files, key=lambda f: f.stat().st_mtime)
                 
+                # Only log once when we first find the file
+                if latest_file != last_file_found:
+                    logger.info(f"Found kube-bench output file: {latest_file}")
+                    last_file_found = latest_file
+                
+                # Check if file is complete (size stable for 3 seconds)
                 try:
-                    with open(latest_file, 'r') as f:
-                        kube_bench_data = json.load(f)
+                    initial_size = latest_file.stat().st_size
+                    if initial_size == 0:
+                        logger.debug("File is empty, waiting...")
+                        time.sleep(2)
+                        continue
                     
-                    # Send the report
-                    self.send_kube_bench_report(kube_bench_data, channel)
-                    logger.info("Kube-bench report sent successfully!")
-                    return True
+                    # Wait and check if size is stable
+                    time.sleep(3)
+                    final_size = latest_file.stat().st_size
                     
+                    if initial_size == final_size:
+                        logger.info("File appears complete, processing...")
+                        
+                        try:
+                            with open(latest_file, 'r') as f:
+                                kube_bench_data = json.load(f)
+                            
+                            # Send the report
+                            self.send_kube_bench_report(kube_bench_data, channel)
+                            logger.info("✅ Kube-bench report sent successfully! Exiting...")
+                            return True
+                            
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Invalid JSON in kube-bench output: {e}")
+                            logger.info("File may still be writing, waiting...")
+                            time.sleep(2)
+                            continue
+                        except Exception as e:
+                            logger.error(f"Error processing kube-bench output: {e}")
+                            # Send error notification
+                            self.client.send_message(f"❌ Error processing kube-bench results: {str(e)}", channel)
+                            return False
+                    else:
+                        logger.debug(f"File still being written (size changed from {initial_size} to {final_size}), waiting...")
+                        
                 except Exception as e:
-                    logger.error(f"Error processing kube-bench output: {e}")
-                    # Send error notification
-                    self.client.send_message(f"❌ Error processing kube-bench results: {str(e)}", channel)
-                    return False
+                    logger.error(f"Error checking file: {e}")
+                    time.sleep(2)
+                    continue
             
-            time.sleep(5)  # Check every 5 seconds
+            time.sleep(2)  # Check every 2 seconds
         
-        logger.warning(f"No kube-bench output found after {max_wait_time} seconds")
+        logger.warning(f"⚠️ No complete kube-bench output found after {max_wait_time} seconds")
         self.client.send_message("⚠️ Kube-bench scan timed out - no results found", channel)
         return False
