@@ -1,24 +1,81 @@
 """
 Configuration Module
 
-Handles application configuration and environment variables.
+Handles application configuration from YAML files and environment variables.
 """
 
 import os
-from typing import Optional
+import yaml
+from typing import Optional, Dict, Any
+from pathlib import Path
 
 
 class Config:
     """Application configuration manager."""
     
-    def __init__(self):
-        """Initialize configuration from environment variables."""
-        self.slack_bot_token = os.getenv('SLACK_BOT_TOKEN')
-        self.slack_channel = os.getenv('SLACK_CHANNEL', '#kube-bench')
-        self.kube_bench_output_dir = os.getenv('KUBE_BENCH_OUTPUT_DIR', '/tmp/kube-bench-results')
-        self.max_wait_time = int(os.getenv('MAX_WAIT_TIME', '300'))
-        self.debug = os.getenv('DEBUG', 'false').lower() == 'true'
-        self.test_mode = os.getenv('TEST_MODE', 'false').lower() == 'true'
+    def __init__(self, config_file: str = "config.yaml"):
+        """
+        Initialize configuration from YAML file with fallback to environment variables.
+        
+        Args:
+            config_file: Path to config YAML file (default: config.yaml)
+        """
+        self.config_file = config_file
+        self.config_data = {}
+        
+        # Try to load from YAML file
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    self.config_data = yaml.safe_load(f) or {}
+                print(f"✅ Loaded configuration from {config_file}")
+            except Exception as e:
+                print(f"⚠️ Could not load config file: {e}, using environment variables")
+        
+        # Load values (YAML first, then env vars as fallback)
+        self.slack_bot_token = self._get_value(['slack', 'bot_token'], 'SLACK_BOT_TOKEN')
+        self.slack_channel = self._get_value(['slack', 'channel'], 'SLACK_CHANNEL', '#kube-bench')
+        self.slack_default_channel = self._get_value(['slack', 'default_channel'], 'DEFAULT_CHANNEL', '#general')
+        self.kube_bench_output_dir = self._get_value(['kubernetes', 'output_dir'], 'KUBE_BENCH_OUTPUT_DIR', '/tmp/kube-bench-results')
+        self.max_wait_time = int(self._get_value(['kubernetes', 'max_wait_time'], 'MAX_WAIT_TIME', '300'))
+        self.namespace = self._get_value(['kubernetes', 'namespace'], 'NAMESPACE', 'kube-bench')
+        
+        # Docker config
+        self.docker_username = self._get_value(['docker', 'username'], 'DOCKER_USERNAME', None)
+        self.docker_image_name = self._get_value(['docker', 'image_name'], 'IMAGE_NAME', 'slack-kube-bench')
+        self.docker_image_tag = self._get_value(['docker', 'image_tag'], 'IMAGE_TAG', 'latest')
+        
+        # OpenAI config
+        self.openai_api_key = self._get_value(['openai', 'api_key'], 'OPENAI_API_KEY', None)
+        self.openai_enabled = self._get_value(['openai', 'enabled'], 'OPENAI_ENABLED', 'true').lower() == 'true'
+        self.openai_model = self._get_value(['openai', 'model'], 'OPENAI_MODEL', 'gpt-4')
+        
+        # App config
+        self.debug = self._get_value(['app', 'debug'], 'DEBUG', 'false').lower() == 'true'
+        self.test_mode = self._get_value(['app', 'test_mode'], 'TEST_MODE', 'false').lower() == 'true'
+        self.log_level = self._get_value(['app', 'log_level'], 'LOG_LEVEL', 'INFO')
+    
+    def _get_value(self, yaml_path: list, env_var: str, default: str = None) -> str:
+        """Get value from YAML config or environment variable with fallback."""
+        # Try YAML first
+        value = self.config_data
+        for key in yaml_path:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            else:
+                value = None
+                break
+        
+        if value is not None:
+            return str(value)
+        
+        # Try environment variable
+        env_value = os.getenv(env_var)
+        if env_value:
+            return env_value
+        
+        # Return default
+        return default
     
     def validate(self) -> bool:
         """
@@ -54,3 +111,23 @@ class Config:
     def is_test_mode(self) -> bool:
         """Check if test mode is enabled."""
         return self.test_mode
+    
+    def get_openai_api_key(self) -> Optional[str]:
+        """Get OpenAI API key."""
+        return self.openai_api_key
+    
+    def get_openai_model(self) -> str:
+        """Get OpenAI model."""
+        return self.openai_model
+    
+    def is_openai_enabled(self) -> bool:
+        """Check if OpenAI is enabled."""
+        return self.openai_enabled and self.openai_api_key is not None
+    
+    def get_docker_config(self) -> Dict[str, str]:
+        """Get Docker configuration."""
+        return {
+            'username': self.docker_username,
+            'image_name': self.docker_image_name,
+            'image_tag': self.docker_image_tag
+        }

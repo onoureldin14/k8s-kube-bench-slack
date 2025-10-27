@@ -1,8 +1,12 @@
 # Kube-bench Security Scanner with Slack Notifications
 # Makefile for easy project management
 
-# Docker Hub configuration
-DOCKER_USERNAME ?= $(shell bash -c 'read -p "Docker Hub username: " username; echo $$username')
+# Load configuration from config.yaml if available, otherwise use env vars
+# Extract values using simple grep since yaml parsing in make is complex
+DOCKER_USERNAME ?= $(shell if [ -f config.yaml ]; then grep -A 1 "^docker:" config.yaml | grep username | cut -d'"' -f2 | cut -d'"' -f1 || echo ""; fi)
+SLACK_TOKEN ?= $(shell if [ -f config.yaml ]; then grep -A 1 "^slack:" config.yaml | grep bot_token | cut -d'"' -f2 | cut -d'"' -f1 || echo ""; fi)
+OPENAI_API_KEY ?= $(shell if [ -f config.yaml ]; then grep -A 1 "^openai:" config.yaml | grep api_key | cut -d'"' -f2 | cut -d'"' -f1 || echo ""; fi)
+
 IMAGE_NAME = slack-kube-bench
 IMAGE_TAG ?= latest
 FULL_IMAGE_NAME = $(DOCKER_USERNAME)/$(IMAGE_NAME):$(IMAGE_TAG)
@@ -29,10 +33,12 @@ help:
 	@echo "  helm-deploy-cron - Deploy CronJob using Helm"
 	@echo "  clean          - Clean up all resources (kubectl)"
 	@echo "  helm-clean     - Clean up Helm release"
+	@echo "  config         - Create config.yaml from example (interactive)"
 	@echo "  install        - Install Python dependencies in virtual environment"
 	@echo "  activate       - Show how to activate virtual environment"
-	@echo "  test           - Test Slack connection locally [OPENAI_API_KEY=sk-... for AI]"
-	@echo "  test-ai        - Test only AI generation (DEPRECATED: use 'make test' instead)"
+	@echo "  test           - Test Slack connection locally [uses config.yaml]"
+	@echo "  test-ai        - Test only AI generation (requires SLACK_BOT_TOKEN env var)"
+	@echo "  test-ai-retry  - Test AI retry mechanism with many findings"
 	@echo "  logs           - View application logs"
 	@echo "  status         - Check deployment status"
 	@echo "  helm-status    - Check Helm release status"
@@ -40,12 +46,14 @@ help:
 	@echo "  openai-secret  - Create OpenAI API key secret (requires OPENAI_API_KEY)"
 	@echo ""
 	@echo "Quick Start (Docker Hub):"
-	@echo "  make docker-login DOCKER_USERNAME=your-username"
-	@echo "  make docker-build DOCKER_USERNAME=your-username"
-	@echo "  make setup-minikube"
-	@echo "  make secret SLACK_TOKEN=xoxb-..."
-	@echo "  make openai-secret OPENAI_API_KEY=sk-... (optional)"
-	@echo "  make helm-deploy DOCKER_USERNAME=your-username"
+	@echo "  1. make config  # Create config.yaml from example"
+	@echo "  2. Edit config.yaml with your secrets"
+	@echo "  3. make docker-login DOCKER_USERNAME=your-username"
+	@echo "  4. make docker-build DOCKER_USERNAME=your-username"
+	@echo "  5. make setup-minikube"
+	@echo "  6. make helm-deploy # Uses config.yaml values"
+	@echo ""
+	@echo "Note: config.yaml contains all secrets and is NOT committed to git"
 
 # Check if minikube is installed
 check-minikube:
@@ -153,20 +161,28 @@ reset-minikube:
 
 # Login to Docker Hub
 docker-login:
-ifndef DOCKER_USERNAME
-	@echo "❌ DOCKER_USERNAME is required. Usage: make docker-login DOCKER_USERNAME=your-username"
-	@exit 1
-endif
+	@if [ -z "$(DOCKER_USERNAME)" ]; then \
+		echo "❌ DOCKER_USERNAME not found in config.yaml or environment"; \
+		echo "💡 Options:"; \
+		echo "   1. Set in config.yaml: docker.username"; \
+		echo "   2. Pass as argument: make docker-login DOCKER_USERNAME=your-username"; \
+		echo "   3. Export as env var: export DOCKER_USERNAME=your-username"; \
+		exit 1; \
+	fi
 	@echo "🔐 Logging in to Docker Hub as $(DOCKER_USERNAME)..."
 	@docker login -u $(DOCKER_USERNAME)
 	@echo "✅ Logged in successfully!"
 
 # Build and push Docker image to Docker Hub
 docker-build:
-ifndef DOCKER_USERNAME
-	@echo "❌ DOCKER_USERNAME is required. Usage: make docker-build DOCKER_USERNAME=your-username"
-	@exit 1
-endif
+	@if [ -z "$(DOCKER_USERNAME)" ]; then \
+		echo "❌ DOCKER_USERNAME not found in config.yaml or environment"; \
+		echo "💡 Options:"; \
+		echo "   1. Set in config.yaml: docker.username"; \
+		echo "   2. Pass as argument: make docker-build DOCKER_USERNAME=your-username"; \
+		echo "   3. Export as env var: export DOCKER_USERNAME=your-username"; \
+		exit 1; \
+	fi
 	@echo "🔨 Building Docker image for Docker Hub..."
 	@echo "📦 Image: $(FULL_IMAGE_NAME)"
 	docker build -t $(FULL_IMAGE_NAME) -f src/Dockerfile src/
@@ -177,10 +193,14 @@ endif
 
 # Push existing image to Docker Hub
 docker-push:
-ifndef DOCKER_USERNAME
-	@echo "❌ DOCKER_USERNAME is required. Usage: make docker-push DOCKER_USERNAME=your-username"
-	@exit 1
-endif
+	@if [ -z "$(DOCKER_USERNAME)" ]; then \
+		echo "❌ DOCKER_USERNAME not found in config.yaml or environment"; \
+		echo "💡 Options:"; \
+		echo "   1. Set in config.yaml: docker.username"; \
+		echo "   2. Pass as argument: make docker-push DOCKER_USERNAME=your-username"; \
+		echo "   3. Export as env var: export DOCKER_USERNAME=your-username"; \
+		exit 1; \
+	fi
 	@echo "📤 Pushing image to Docker Hub..."
 	@echo "📦 Image: $(FULL_IMAGE_NAME)"
 	docker push $(FULL_IMAGE_NAME)
@@ -236,10 +256,14 @@ deploy-cron:
 
 # Deploy using Helm (recommended)
 helm-deploy: check-minikube
-ifndef SLACK_TOKEN
-	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username] [OPENAI_API_KEY=sk-your-key]"
-	@exit 1
-endif
+	@if [ -z "$(SLACK_TOKEN)" ]; then \
+		echo "❌ SLACK_TOKEN not found in config.yaml or environment"; \
+		echo "💡 Options:"; \
+		echo "   1. Set in config.yaml: slack.bot_token"; \
+		echo "   2. Pass as argument: make helm-deploy SLACK_TOKEN=xoxb-your-token"; \
+		echo "   3. Export as env var: export SLACK_TOKEN=xoxb-your-token"; \
+		exit 1; \
+	fi
 	@echo "📦 Ensuring namespace exists..."
 	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
 	@if [ -n "$(DOCKER_USERNAME)" ]; then \
@@ -296,10 +320,14 @@ endif
 
 # Deploy CronJob using Helm
 helm-deploy-cron: check-minikube
-ifndef SLACK_TOKEN
-	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy-cron SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username] [OPENAI_API_KEY=sk-your-key] [CRON_SCHEDULE=\"0 0 * * *\"]"
-	@exit 1
-endif
+	@if [ -z "$(SLACK_TOKEN)" ]; then \
+		echo "❌ SLACK_TOKEN not found in config.yaml or environment"; \
+		echo "💡 Options:"; \
+		echo "   1. Set in config.yaml: slack.bot_token"; \
+		echo "   2. Pass as argument: make helm-deploy-cron SLACK_TOKEN=xoxb-your-token"; \
+		echo "   3. Export as env var: export SLACK_TOKEN=xoxb-your-token"; \
+		exit 1; \
+	fi
 	@echo "📦 Ensuring namespace exists..."
 	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
 	@if [ -n "$(DOCKER_USERNAME)" ]; then \
@@ -367,10 +395,14 @@ endif
 
 # Create Kubernetes secret
 secret:
-ifndef SLACK_TOKEN
-	@echo "❌ SLACK_TOKEN is required. Usage: make secret SLACK_TOKEN=xoxb-your-token [OPENAI_API_KEY=sk-your-key]"
-	@exit 1
-endif
+	@if [ -z "$(SLACK_TOKEN)" ]; then \
+		echo "❌ SLACK_TOKEN not found in config.yaml or environment"; \
+		echo "💡 Options:"; \
+		echo "   1. Set in config.yaml: slack.bot_token"; \
+		echo "   2. Pass as argument: make secret SLACK_TOKEN=xoxb-your-token"; \
+		echo "   3. Export as env var: export SLACK_TOKEN=xoxb-your-token"; \
+		exit 1; \
+	fi
 	@echo "🔐 Creating Kubernetes secret..."
 	@echo "📦 Ensuring namespace exists..."
 	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
@@ -419,11 +451,17 @@ activate:
 		exit 1; \
 	fi
 
-# Test Slack connection locally
+# Test Slack connection locally (uses config.yaml if available, otherwise env vars)
 test:
 	@echo "🧪 Testing Slack connection..."
 	@if [ -d "venv" ]; then \
 		echo "✅ Using virtual environment..."; \
+		if [ -f "config.yaml" ]; then \
+			echo "📝 Using config.yaml for configuration"; \
+		else \
+			echo "⚠️  No config.yaml found, using environment variables"; \
+			echo "💡 Run 'make config' to create config.yaml"; \
+		fi; \
 		if [ -n "$$OPENAI_API_KEY" ]; then \
 			echo "🤖 OpenAI API key detected in environment - AI analysis will be enabled"; \
 			OPENAI_API_KEY="$$OPENAI_API_KEY" . venv/bin/activate && cd src && python main.py; \
@@ -432,7 +470,7 @@ test:
 			OPENAI_API_KEY="$(OPENAI_API_KEY)" . venv/bin/activate && cd src && python main.py; \
 		else \
 			echo "⚠️  No OpenAI API key set - AI analysis will be skipped"; \
-			echo "💡 To enable AI analysis: export OPENAI_API_KEY=sk-your-key"; \
+			echo "💡 To enable AI analysis: set openai.api_key in config.yaml or export OPENAI_API_KEY=sk-your-key"; \
 			. venv/bin/activate && cd src && python main.py; \
 		fi; \
 	else \
@@ -476,6 +514,25 @@ helm-clean:
 	@echo "🧹 Cleaning up Helm release..."
 	helm uninstall kube-bench-slack -n kube-bench --ignore-not-found
 	@echo "✅ Helm cleanup complete!"
+
+# Create config.yaml from example
+config:
+	@echo "📝 Creating config.yaml from example..."
+	@if [ -f "config.yaml" ]; then \
+		echo "⚠️  config.yaml already exists!"; \
+		echo "💡 To update: edit config.yaml directly or remove it and run 'make config' again"; \
+	else \
+		cp config.yaml.example config.yaml; \
+		echo "✅ config.yaml created from example"; \
+		echo ""; \
+		echo "📝 Next steps:"; \
+		echo "   1. Edit config.yaml with your actual values:"; \
+		echo "      - slack.bot_token"; \
+		echo "      - docker.username"; \
+		echo "      - openai.api_key (optional)"; \
+		echo ""; \
+		echo "   2. config.yaml is in .gitignore and will NOT be committed"; \
+	fi
 
 # Install dependencies for local development
 install:

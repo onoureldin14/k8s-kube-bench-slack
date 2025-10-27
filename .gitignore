@@ -35,6 +35,10 @@ venv.bak/
 config/docker.env
 config/*.env
 
+# Configuration files with secrets
+config.yaml
+config/local.yaml
+
 # IDE
 .vscode/
 .idea/

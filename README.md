@@ -36,28 +36,65 @@ A complete Kubernetes solution that runs [kube-bench](https://github.com/aquasec
 - Docker Hub account (for public deployment)
 - **OpenAI API key** (optional - for AI-powered analysis)
 
+### Configuration Setup
+
+The application uses a `config.yaml` file for configuration (instead of environment variables).
+
+1. **Copy the example config:**
+```bash
+cp config.yaml.example config.yaml
+```
+
+2. **Edit `config.yaml` with your values:**
+```yaml
+slack:
+  bot_token: "xoxb-your-actual-token"
+  channel: "#kube-bench"
+
+docker:
+  username: "your-dockerhub-username"
+
+openai:
+  api_key: "sk-your-openai-key"  # Optional
+  enabled: true
+```
+
+3. **Note:** `config.yaml` is in `.gitignore` and will NOT be committed
+
+**Environment Variables Still Work:** You can still use environment variables if you prefer. They are used as fallback when not in config.yaml.
+
 ### Fastest Deployment
 
-**Basic Deployment (without AI):**
+**1. Setup Configuration:**
 ```bash
-# 1. Setup Slack (see Slack Setup section below)
-# 2. Build and push to Docker Hub
-make docker-login DOCKER_USERNAME=your-username
-make docker-build DOCKER_USERNAME=your-username
+# Create config file from example
+make config
 
-# 3. Deploy to Kubernetes
+# Edit config.yaml with your secrets
+# - slack.bot_token
+# - docker.username  
+# - openai.api_key (optional)
+```
+
+**2. Deploy:**
+```bash
+# Build and push to Docker Hub
+make docker-login
+make docker-build  # Uses docker.username from config.yaml
+
+# Setup Kubernetes
 make setup-minikube
-make helm-deploy SLACK_TOKEN=xoxb-your-token DOCKER_USERNAME=your-username
 
-# 4. Check results
+# Deploy (uses secrets from config.yaml)
+make helm-deploy
+```
+
+**3. Check Results:**
+```bash
 make logs
 ```
 
-**With AI Analysis:**
-```bash
-# Same as above, but add OpenAI key
-make helm-deploy SLACK_TOKEN=xoxb-your-token OPENAI_API_KEY=sk-your-key DOCKER_USERNAME=your-username
-```
+**Note:** All secrets are in `config.yaml` (not committed to git). Environment variables still work as fallback.
 
 📖 **For detailed instructions, see the sections below.**
 
@@ -477,14 +514,41 @@ kubectl get jobs -n kube-bench --sort-by=.status.startTime
 
 ## ⚙️ Configuration
 
-### Environment Variables
+The application supports configuration via **YAML file** or **environment variables**.
 
+### Primary Method: config.yaml (Recommended)
+
+1. **Create config file:**
+```bash
+make config  # Creates config.yaml from config.yaml.example
+```
+
+2. **Edit config.yaml:**
+```yaml
+slack:
+  bot_token: "xoxb-your-token-here"
+  channel: "#kube-bench"
+
+docker:
+  username: "your-dockerhub-username"
+
+openai:
+  api_key: "sk-your-key"  # Optional
+  enabled: true
+```
+
+3. **Benefits:**
+- All secrets in one file
+- Version control excluded (`.gitignore`)
+- Easy to manage
+
+### Alternative: Environment Variables
+
+You can still use environment variables (they work as fallback):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SLACK_BOT_TOKEN` | Required | Bot OAuth token |
 | `SLACK_CHANNEL` | `#kube-bench` | Target channel |
-| `KUBE_BENCH_OUTPUT_DIR` | `/tmp/kube-bench-results` | Shared volume path |
-| `MAX_WAIT_TIME` | `300` | Max wait for results (seconds) |
 | `OPENAI_API_KEY` | Optional | For AI-powered security analysis |
 
 ### 🤖 AI Analysis Configuration
