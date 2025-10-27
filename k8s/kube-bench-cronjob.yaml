@@ -57,6 +57,12 @@ spec:
               value: "#kube-bench"
             - name: KUBE_BENCH_OUTPUT_DIR
               value: "/tmp/kube-bench-results"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: openai-api-key
+                  optional: true
             volumeMounts:
             - name: kube-bench-results
               mountPath: /tmp/kube-bench-results

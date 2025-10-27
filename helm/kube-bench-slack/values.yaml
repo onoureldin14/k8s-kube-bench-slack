@@ -72,6 +72,18 @@ slack:
   # 2. Leave empty to use existing secret named 'slack-credentials'
   token: ""  # Set via --set slack.token="xoxb-..." or leave empty to use existing secret
 
+# OpenAI configuration (optional)
+openai:
+  # OpenAI API key for AI-powered security analysis
+  # Can be provided as:
+  # 1. A string: --set openai.apiKey="sk-your-key" (creates secret automatically)
+  # 2. Leave empty to disable AI analysis (system works fine without it)
+  # 3. Use existing secret: --set openai.apiKey="" (relies on existing openai-credentials secret)
+  apiKey: ""  # Set via --set openai.apiKey="sk-..." or leave empty to disable AI analysis
+  
+  # Enable/disable AI analysis
+  enabled: true  # Set to false to completely disable AI features
+
 # Job configuration
 job:
   # Job name

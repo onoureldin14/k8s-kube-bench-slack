@@ -81,6 +81,31 @@ spec:
           value: {{ .Values.slack.outputDir | quote }}
         - name: MAX_WAIT_TIME
           value: {{ .Values.slack.maxWaitTime | quote }}
+        {{- if and .Values.openai.enabled .Values.openai.apiKey }}
+        {{- if kindIs "string" .Values.openai.apiKey }}
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-bench-slack.secretName" . }}
+              key: openai-api-key
+        {{- else }}
+        # OpenAI secret exists separately
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-credentials
+              key: openai-api-key
+              optional: true
+        {{- end }}
+        {{- else if .Values.openai.enabled }}
+        # Try to use existing OpenAI secret if enabled but apiKey not provided
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-credentials
+              key: openai-api-key
+              optional: true
+        {{- end }}
         {{- if .Values.dev.debug }}
         - name: DEBUG
           value: "true"
