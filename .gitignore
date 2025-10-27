@@ -75,6 +75,7 @@ test_connection.py
 test_html.py
 test-report.html
 test-json.json
+test_openai.py
 *-report-*.html
 
 # Documentation (keep only README.md)

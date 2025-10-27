@@ -143,6 +143,75 @@ class KubeBenchSlackApp:
                 logger.warning(f"⚠️ HTML/JSON upload test failed: {e}")
                 # Don't fail the whole test
             
+            # Test AI analysis (if enabled)
+            logger.info("🤖 Testing AI security analysis...")
+            try:
+                from utils.ai_analyzer import SecurityAIAnalyzer
+                
+                analyzer = SecurityAIAnalyzer()
+                if analyzer.api_key:
+                    # Send progress message to Slack
+                    self.slack_client.send_message(
+                        "🤖 **AI Analysis in Progress...**\n\nAnalyzing security findings and generating risk assessment report for test data. This may take 30-60 seconds.",
+                        self.config.get_slack_channel()
+                    )
+                    
+                    # Generate AI analysis
+                    ai_html = analyzer.analyze_security_scan(dummy_data, dummy_data.get('version', 'unknown'))
+                    
+                    if ai_html and 'ai_summary' in ai_html:
+                        # Create temporary directory for AI report
+                        with tempfile.TemporaryDirectory() as ai_tmpdir:
+                            ai_tmppath = Path(ai_tmpdir)
+                            
+                            # Wrap AI content in proper HTML structure
+                            full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Security Analysis Report (Test)</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; border-bottom: 3px solid #7b42f6; padding-bottom: 10px; }}
+        h2 {{ color: #7b42f6; margin-top: 30px; }}
+        .badge {{ display: inline-block; padding: 5px 10px; border-radius: 5px; font-weight: bold; margin: 5px 0; }}
+        .badge-high {{ background: #ff4444; color: white; }}
+        .badge-medium {{ background: #ff9900; color: white; }}
+        .badge-low {{ background: #44ff44; color: black; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        {ai_html['ai_summary']}
+    </div>
+</body>
+</html>"""
+                            
+                            # Save AI analysis HTML
+                            ai_path = ai_tmppath / "ai-test-report.html"
+                            with open(ai_path, 'w') as f:
+                                f.write(full_html)
+                            
+                            # Upload AI analysis report
+                            logger.info("📤 Uploading AI analysis report to Slack...")
+                            self.slack_client.upload_file(
+                                file_path=str(ai_path),
+                                channel=self.config.get_slack_channel(),
+                                title="AI Security Analysis Report (Test)",
+                                initial_comment="🤖 AI-powered security analysis with risk assessment and remediation roadmap - Download and open in your browser!"
+                            )
+                            logger.info("✅ AI analysis uploaded successfully!")
+                    else:
+                        logger.info("⚠️ AI analysis not available")
+                else:
+                    logger.info("⚠️ No OpenAI API key set - AI analysis skipped")
+            except ImportError:
+                logger.warning("⚠️ OpenAI not available, skipping AI analysis")
+            except Exception as e:
+                logger.warning(f"⚠️ AI analysis failed: {e}, continuing without it")
+            
             # Test structured data
             logger.info("📋 Testing structured data...")
             test_data = {

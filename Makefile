@@ -31,17 +31,20 @@ help:
 	@echo "  helm-clean     - Clean up Helm release"
 	@echo "  install        - Install Python dependencies in virtual environment"
 	@echo "  activate       - Show how to activate virtual environment"
-	@echo "  test           - Test Slack connection locally"
+	@echo "  test           - Test Slack connection locally [OPENAI_API_KEY=sk-... for AI]"
+	@echo "  test-ai        - Test only AI generation (DEPRECATED: use 'make test' instead)"
 	@echo "  logs           - View application logs"
 	@echo "  status         - Check deployment status"
 	@echo "  helm-status    - Check Helm release status"
 	@echo "  secret         - Create Kubernetes secret (requires SLACK_TOKEN)"
+	@echo "  openai-secret  - Create OpenAI API key secret (requires OPENAI_API_KEY)"
 	@echo ""
 	@echo "Quick Start (Docker Hub):"
 	@echo "  make docker-login DOCKER_USERNAME=your-username"
 	@echo "  make docker-build DOCKER_USERNAME=your-username"
 	@echo "  make setup-minikube"
 	@echo "  make secret SLACK_TOKEN=xoxb-..."
+	@echo "  make openai-secret OPENAI_API_KEY=sk-... (optional)"
 	@echo "  make helm-deploy DOCKER_USERNAME=your-username"
 
 # Check if minikube is installed
@@ -234,29 +237,54 @@ deploy-cron:
 # Deploy using Helm (recommended)
 helm-deploy: check-minikube
 ifndef SLACK_TOKEN
-	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username]"
+	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username] [OPENAI_API_KEY=sk-your-key]"
 	@exit 1
 endif
 	@echo "📦 Ensuring namespace exists..."
 	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
 	@if [ -n "$(DOCKER_USERNAME)" ]; then \
 		echo "🐳 Using Docker Hub image: $(FULL_IMAGE_NAME)"; \
-		echo "📋 Deploying kube-bench with Helm..."; \
-		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
-			--set slack.token="$(SLACK_TOKEN)" \
-			--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
-			--set image.tag="$(IMAGE_TAG)" \
-			--set image.pullPolicy="Always" \
-			--namespace kube-bench \
-			--wait; \
+		if [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI AI analysis enabled"; \
+			echo "📋 Deploying kube-bench with Helm (with AI)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set openai.apiKey="$(OPENAI_API_KEY)" \
+				--set openai.enabled=true \
+				--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
+				--set image.tag="$(IMAGE_TAG)" \
+				--set image.pullPolicy="Always" \
+				--namespace kube-bench \
+				--wait; \
+		else \
+			echo "📋 Deploying kube-bench with Helm (AI disabled)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
+				--set image.tag="$(IMAGE_TAG)" \
+				--set image.pullPolicy="Always" \
+				--namespace kube-bench \
+				--wait; \
+		fi; \
 	else \
 		echo "📦 Using local minikube image (building first...)"; \
 		$(MAKE) build; \
-		echo "📋 Deploying kube-bench with Helm..."; \
-		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
-			--set slack.token="$(SLACK_TOKEN)" \
-			--namespace kube-bench \
-			--wait; \
+		if [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI AI analysis enabled"; \
+			echo "📋 Deploying kube-bench with Helm (with AI)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set openai.apiKey="$(OPENAI_API_KEY)" \
+				--set openai.enabled=true \
+				--namespace kube-bench \
+				--wait; \
+		else \
+			echo "📋 Deploying kube-bench with Helm (AI disabled)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--namespace kube-bench \
+				--wait; \
+		fi; \
 	fi
 	@echo "✅ Helm deployment complete!"
 	@echo ""
@@ -269,33 +297,62 @@ endif
 # Deploy CronJob using Helm
 helm-deploy-cron: check-minikube
 ifndef SLACK_TOKEN
-	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy-cron SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username] [CRON_SCHEDULE=\"0 0 * * *\"]"
+	@echo "❌ SLACK_TOKEN is required. Usage: make helm-deploy-cron SLACK_TOKEN=xoxb-your-token [DOCKER_USERNAME=your-username] [OPENAI_API_KEY=sk-your-key] [CRON_SCHEDULE=\"0 0 * * *\"]"
 	@exit 1
 endif
 	@echo "📦 Ensuring namespace exists..."
 	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
 	@if [ -n "$(DOCKER_USERNAME)" ]; then \
 		echo "🐳 Using Docker Hub image: $(FULL_IMAGE_NAME)"; \
-		echo "📋 Deploying kube-bench CronJob with Helm..."; \
-		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
-			--set slack.token="$(SLACK_TOKEN)" \
-			--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
-			--set image.tag="$(IMAGE_TAG)" \
-			--set image.pullPolicy="Always" \
-			--set cronjob.enabled=true \
-			--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
-			--namespace kube-bench \
-			--wait; \
+		if [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI AI analysis enabled"; \
+			echo "📋 Deploying kube-bench CronJob with Helm (with AI)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set openai.apiKey="$(OPENAI_API_KEY)" \
+				--set openai.enabled=true \
+				--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
+				--set image.tag="$(IMAGE_TAG)" \
+				--set image.pullPolicy="Always" \
+				--set cronjob.enabled=true \
+				--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
+				--namespace kube-bench \
+				--wait; \
+		else \
+			echo "📋 Deploying kube-bench CronJob with Helm (AI disabled)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set image.repository="$(DOCKER_USERNAME)/$(IMAGE_NAME)" \
+				--set image.tag="$(IMAGE_TAG)" \
+				--set image.pullPolicy="Always" \
+				--set cronjob.enabled=true \
+				--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
+				--namespace kube-bench \
+				--wait; \
+		fi; \
 	else \
 		echo "📦 Using local minikube image (building first...)"; \
 		$(MAKE) build; \
-		echo "📋 Deploying kube-bench CronJob with Helm..."; \
-		helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
-			--set slack.token="$(SLACK_TOKEN)" \
-			--set cronjob.enabled=true \
-			--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
-			--namespace kube-bench \
-			--wait; \
+		if [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI AI analysis enabled"; \
+			echo "📋 Deploying kube-bench CronJob with Helm (with AI)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set openai.apiKey="$(OPENAI_API_KEY)" \
+				--set openai.enabled=true \
+				--set cronjob.enabled=true \
+				--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
+				--namespace kube-bench \
+				--wait; \
+		else \
+			echo "📋 Deploying kube-bench CronJob with Helm (AI disabled)..."; \
+			helm upgrade --install kube-bench-slack ./helm/kube-bench-slack \
+				--set slack.token="$(SLACK_TOKEN)" \
+				--set cronjob.enabled=true \
+				--set cronjob.schedule="$(or $(CRON_SCHEDULE),0 0 * * *)" \
+				--namespace kube-bench \
+				--wait; \
+		fi; \
 	fi
 	@echo "✅ Helm CronJob deployment complete!"
 	@echo ""
@@ -311,18 +368,44 @@ endif
 # Create Kubernetes secret
 secret:
 ifndef SLACK_TOKEN
-	@echo "❌ SLACK_TOKEN is required. Usage: make secret SLACK_TOKEN=xoxb-your-token"
+	@echo "❌ SLACK_TOKEN is required. Usage: make secret SLACK_TOKEN=xoxb-your-token [OPENAI_API_KEY=sk-your-key]"
 	@exit 1
 endif
 	@echo "🔐 Creating Kubernetes secret..."
 	@echo "📦 Ensuring namespace exists..."
 	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
 	@echo "🔑 Creating secret..."
-	@kubectl create secret generic slack-credentials \
-		--from-literal=slack-bot-token="$(SLACK_TOKEN)" \
+	@if [ -n "$(OPENAI_API_KEY)" ]; then \
+		echo "🤖 Including OpenAI API key in secret..."; \
+		kubectl create secret generic slack-credentials \
+			--from-literal=slack-bot-token="$(SLACK_TOKEN)" \
+			--from-literal=openai-api-key="$(OPENAI_API_KEY)" \
+			--namespace=kube-bench \
+			--dry-run=client -o yaml | kubectl apply -f -; \
+	else \
+		kubectl create secret generic slack-credentials \
+			--from-literal=slack-bot-token="$(SLACK_TOKEN)" \
+			--namespace=kube-bench \
+			--dry-run=client -o yaml | kubectl apply -f -; \
+	fi
+	@echo "✅ Secret created!"
+
+# Create OpenAI API key secret (optional)
+openai-secret:
+ifndef OPENAI_API_KEY
+	@echo "❌ OPENAI_API_KEY is required. Usage: make openai-secret OPENAI_API_KEY=sk-your-key"
+	@exit 1
+endif
+	@echo "🤖 Creating OpenAI secret..."
+	@echo "📦 Ensuring namespace exists..."
+	@kubectl create namespace kube-bench --dry-run=client -o yaml | kubectl apply -f -
+	@echo "🔑 Creating secret..."
+	@kubectl create secret generic openai-credentials \
+		--from-literal=openai-api-key="$(OPENAI_API_KEY)" \
 		--namespace=kube-bench \
 		--dry-run=client -o yaml | kubectl apply -f -
-	@echo "✅ Secret created!"
+	@echo "✅ OpenAI secret created!"
+	@echo "💡 AI analysis will now be enabled for security scans"
 
 # Activate virtual environment
 activate:
@@ -341,7 +424,17 @@ test:
 	@echo "🧪 Testing Slack connection..."
 	@if [ -d "venv" ]; then \
 		echo "✅ Using virtual environment..."; \
-		. venv/bin/activate && cd src && python main.py; \
+		if [ -n "$$OPENAI_API_KEY" ]; then \
+			echo "🤖 OpenAI API key detected in environment - AI analysis will be enabled"; \
+			OPENAI_API_KEY="$$OPENAI_API_KEY" . venv/bin/activate && cd src && python main.py; \
+		elif [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI API key provided via argument - AI analysis will be enabled"; \
+			OPENAI_API_KEY="$(OPENAI_API_KEY)" . venv/bin/activate && cd src && python main.py; \
+		else \
+			echo "⚠️  No OpenAI API key set - AI analysis will be skipped"; \
+			echo "💡 To enable AI analysis: export OPENAI_API_KEY=sk-your-key"; \
+			. venv/bin/activate && cd src && python main.py; \
+		fi; \
 	else \
 		echo "❌ Virtual environment not found. Run 'make install' first."; \
 		exit 1; \
@@ -411,3 +504,57 @@ format:
 	@echo "🎨 Formatting code..."
 	cd src && python -m black main.py
 	@echo "✅ Code formatted!"
+
+# Test AI generation only (sends to Slack)
+test-ai:
+	@echo "🤖 Testing AI generation and sending to Slack..."
+	@if [ -d "venv" ]; then \
+		echo "✅ Using virtual environment..."; \
+		if [ -z "$$SLACK_BOT_TOKEN" ] && [ -z "$(SLACK_BOT_TOKEN)" ]; then \
+			echo "❌ SLACK_BOT_TOKEN is required for AI testing"; \
+			echo "💡 To test: export SLACK_BOT_TOKEN=xoxb-your-token or make test-ai SLACK_BOT_TOKEN=xoxb-your-token"; \
+			exit 1; \
+		fi; \
+		if [ -n "$$OPENAI_API_KEY" ]; then \
+			echo "🤖 OpenAI API key detected in environment"; \
+			OPENAI_API_KEY="$$OPENAI_API_KEY" SLACK_BOT_TOKEN="$$SLACK_BOT_TOKEN" . venv/bin/activate && cd src && python test_ai.py; \
+		elif [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI API key provided via argument"; \
+			OPENAI_API_KEY="$(OPENAI_API_KEY)" SLACK_BOT_TOKEN="$(SLACK_BOT_TOKEN)" . venv/bin/activate && cd src && python test_ai.py; \
+		else \
+			echo "❌ OPENAI_API_KEY is required for AI testing"; \
+			echo "💡 To test: export OPENAI_API_KEY=sk-your-key or make test-ai OPENAI_API_KEY=sk-your-key"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ Virtual environment not found. Run 'make install' first."; \
+		exit 1; \
+	fi
+
+# Test AI retry mechanism (simulates token limit)
+test-ai-retry:
+	@echo "🔄 Testing AI retry mechanism with many findings..."
+	@if [ -d "venv" ]; then \
+		echo "✅ Using virtual environment..."; \
+		if [ -z "$$SLACK_BOT_TOKEN" ] && [ -z "$(SLACK_BOT_TOKEN)" ]; then \
+			echo "❌ SLACK_BOT_TOKEN is required for AI testing"; \
+			echo "💡 To test: export SLACK_BOT_TOKEN=xoxb-your-token or make test-ai-retry SLACK_BOT_TOKEN=xoxb-your-token"; \
+			exit 1; \
+		fi; \
+		if [ -n "$$OPENAI_API_KEY" ]; then \
+			echo "🤖 OpenAI API key detected in environment"; \
+			echo "🔄 Testing retry mechanism with limited findings..."; \
+			TEST_RETRY_MECHANISM="true" OPENAI_API_KEY="$$OPENAI_API_KEY" SLACK_BOT_TOKEN="$$SLACK_BOT_TOKEN" . venv/bin/activate && cd src && python test_ai.py; \
+		elif [ -n "$(OPENAI_API_KEY)" ]; then \
+			echo "🤖 OpenAI API key provided via argument"; \
+			echo "🔄 Testing retry mechanism with limited findings..."; \
+			TEST_RETRY_MECHANISM="true" OPENAI_API_KEY="$(OPENAI_API_KEY)" SLACK_BOT_TOKEN="$(SLACK_BOT_TOKEN)" . venv/bin/activate && cd src && python test_ai.py; \
+		else \
+			echo "❌ OPENAI_API_KEY is required for AI testing"; \
+			echo "💡 To test: export OPENAI_API_KEY=sk-your-key or make test-ai-retry OPENAI_API_KEY=sk-your-key"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ Virtual environment not found. Run 'make install' first."; \
+		exit 1; \
+	fi

@@ -31,13 +31,15 @@ class SlackNotifier:
         self.client = client
         self.formatter = SlackFormatter()
     
-    def send_kube_bench_report(self, kube_bench_data: Dict[str, Any], channel: Optional[str] = None) -> Dict[str, Any]:
+    def send_kube_bench_report(self, kube_bench_data: Dict[str, Any], channel: Optional[str] = None, 
+                              include_ai: bool = True) -> Dict[str, Any]:
         """
         Send a formatted kube-bench security report to Slack.
         
         Args:
             kube_bench_data: Parsed kube-bench JSON output
             channel: Channel to send to (defaults to DEFAULT_CHANNEL)
+            include_ai: Whether to include AI analysis (requires OpenAI API key)
         
         Returns:
             Response from Slack API
@@ -47,6 +49,8 @@ class SlackNotifier:
         
         # Create rich blocks for the report
         blocks = self.formatter.create_kube_bench_blocks(summary, kube_bench_data)
+        
+        # AI analysis will be handled separately and sent as HTML file
         
         try:
             response = self.client.send_rich_message(
@@ -191,6 +195,46 @@ class SlackNotifier:
                             except Exception as e:
                                 logger.warning(f"⚠️ Could not generate/upload HTML report: {e}")
                                 # Don't fail the whole process if HTML generation fails
+                            
+                            # Generate and upload AI analysis report (if enabled)
+                            logger.info("🤖 Generating AI security analysis...")
+                            try:
+                                from utils.ai_analyzer import SecurityAIAnalyzer
+                                
+                                # Send progress message to Slack
+                                analyzer = SecurityAIAnalyzer()
+                                if analyzer.api_key:
+                                    self.client.send_message(
+                                        "🤖 **AI Analysis in Progress...**\n\nAnalyzing security findings and generating risk assessment report. This may take 30-60 seconds.",
+                                        channel
+                                    )
+                                
+                                ai_html = analyzer.analyze_security_scan(kube_bench_data, kube_bench_data.get('version', 'unknown'))
+                                
+                                if ai_html and 'ai_summary' in ai_html:
+                                    # ai_html['ai_summary'] already contains complete HTML with styling
+                                    full_html = ai_html['ai_summary']
+                                    
+                                    # Save AI analysis HTML
+                                    ai_path = output_path / f"ai-analysis-{timestamp}.html"
+                                    with open(ai_path, 'w') as f:
+                                        f.write(full_html)
+                                    
+                                    # Upload AI analysis report
+                                    logger.info("📤 Uploading AI analysis report...")
+                                    self.client.upload_file(
+                                        file_path=str(ai_path),
+                                        channel=channel,
+                                        title=f"AI Security Analysis Report - {timestamp}",
+                                        initial_comment="🤖 AI-powered security analysis with risk assessment and remediation roadmap - Download and open in your browser!"
+                                    )
+                                    logger.info("✅ AI analysis uploaded successfully!")
+                                else:
+                                    logger.info("⚠️ AI analysis not available (no API key or analysis failed)")
+                            except ImportError:
+                                logger.warning("⚠️ OpenAI not available, skipping AI analysis")
+                            except Exception as e:
+                                logger.warning(f"⚠️ AI analysis failed: {e}, continuing without it")
                             
                             logger.info("✅ Kube-bench report sent successfully! Exiting...")
                             return True
