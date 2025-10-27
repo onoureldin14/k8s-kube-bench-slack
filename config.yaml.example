@@ -1,0 +1,34 @@
+# Kube-bench Security Scanner Configuration
+# Copy this file to config.yaml and fill in your actual values
+# config.yaml is in .gitignore and will NOT be committed
+
+# Slack Configuration
+slack:
+  bot_token: "xoxb-your-oauth-token-here"
+  channel: "#kube-bench"
+  default_channel: "#general"
+
+# Kubernetes Configuration
+kubernetes:
+  output_dir: "/tmp/kube-bench-results"
+  max_wait_time: 300  # seconds
+  namespace: "kube-bench"
+
+# Docker Hub Configuration (for building and pushing images)
+docker:
+  username: "your-dockerhub-username"
+  image_name: "slack-kube-bench"
+  image_tag: "latest"
+
+# OpenAI Configuration (Optional - for AI Security Analysis)
+openai:
+  api_key: "sk-your-openai-api-key-here"
+  enabled: true
+  model: "gpt-4"
+
+# Application Configuration
+app:
+  debug: false
+  test_mode: false
+  log_level: "INFO"
+
